@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unstop Round Reminder</title>
+<style>
+  :root {
+    --bg: #f4f5fb; --surface: #ffffff; --surface-2: #f7f8fc; --ink: #161a2e; --muted: #687089; --line: #e6e8f2;
+    --accent: #5b4bff; --accent-2: #8a3ffc; --accent-soft: #eeecff; --accent-ink: #ffffff;
+    --live: #0e9f6e; --live-soft: #e3f8ef; --soon: #d97706; --soon-soft: #fff4e0; --done: #9aa1b8; --danger: #dc3545; --danger-soft: #fdecee;
+    --shadow: 0 1px 2px rgba(22,26,46,.04), 0 4px 16px rgba(22,26,46,.06);
+    --radius: 16px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1120; --surface: #181b2e; --surface-2: #1f2338; --ink: #eceef8; --muted: #9aa1bd; --line: #2b3050;
+      --accent: #7c6dff; --accent-2: #a46bff; --accent-soft: #262457; --accent-ink: #ffffff;
+      --live: #34d399; --live-soft: #12352b; --soon: #fbbf24; --soon-soft: #3a2f12; --done: #6b7290; --danger: #f87171; --danger-soft: #3b1d24;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+
+  /* ---------- top bar & tabs ---------- */
+  .topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent);
+            backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  .topbar-inner, main { max-width: 1040px; margin: 0 auto; padding-inline: 20px; }
+  .brandrow { display: flex; align-items: center; gap: 12px; padding-block: 14px 6px; flex-wrap: wrap; }
+  .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-size: 20px;
+          background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent); }
+  .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+          background: var(--live-soft); color: var(--live); }
+  .pill.off { background: var(--danger-soft); color: var(--danger); }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .spacer { flex: 1; }
+  .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .tab { border: 0; background: none; padding: 10px 14px 12px; cursor: pointer; color: var(--muted); font-weight: 600;
+         border-bottom: 2.5px solid transparent; white-space: nowrap; display: inline-flex; gap: 8px; align-items: center; }
+  .tab:hover { color: var(--ink); }
+  .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .n { font-size: .72rem; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 0 7px; }
+  .tab.on .n { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+  main { padding-block: 24px 80px; }
+  section[hidden] { display: none; }
+  h2 { font-size: 1.05rem; margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; }
+  h2:first-child { margin-top: 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: .85rem; }
+
+  /* ---------- buttons ---------- */
+  .btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px;
+         padding: 8px 14px; cursor: pointer; font-weight: 600; font-size: .9rem; text-decoration: none; color: var(--ink); transition: .15s; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink); border-color: transparent;
+                 box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .btn.primary:hover { filter: brightness(1.08); color: var(--accent-ink); }
+  .btn.ghost { background: transparent; }
+  .btn.danger { color: var(--danger); }
+  .btn.danger:hover { border-color: var(--danger); background: var(--danger-soft); }
+  .btn.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .btn.sm { padding: 6px 11px; font-size: .82rem; border-radius: 9px; }
+  .btn:disabled { opacity: .6; cursor: wait; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .pad { padding: 20px; }
+
+  /* ---------- filter chips ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; align-items: center; }
+  .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 14px; font-size: .85rem;
+          font-weight: 600; cursor: pointer; color: var(--muted); }
+  .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; overflow: hidden; border-radius: 20px; padding: 26px; color: #fff;
+          background: radial-gradient(120% 140% at 100% 0%, #b06bff 0%, transparent 55%), linear-gradient(135deg, #4f46e5, #7c3aed);
+          box-shadow: 0 10px 30px rgba(91,75,255,.3); }
+  .hero.live { background: radial-gradient(120% 140% at 100% 0%, #34d399 0%, transparent 55%), linear-gradient(135deg, #047857, #0e9f6e); box-shadow: 0 10px 30px rgba(14,159,110,.3); }
+  .hero .eyebrow { font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+  .hero h3 { font-size: 1.45rem; margin: 6px 0 2px; line-height: 1.25; }
+  .hero .sub { opacity: .85; }
+  .cd { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
+  .cd div { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.22); border-radius: 12px; min-width: 70px; padding: 8px 10px; text-align: center; }
+  .cd b { display: block; font-size: 1.7rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .cd span { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
+  .hero .btn { background: #fff; color: #3b2fd0; border-color: #fff; }
+  .hero.live .btn { color: #047857; }
+  .hero-empty { text-align: center; padding: 34px 20px; }
+
+  /* ---------- stats ---------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; }
+  .stat { padding: 16px 18px; }
+  .stat .v { font-size: 1.6rem; font-weight: 750; letter-spacing: -.02em; }
+  .stat .l { color: var(--muted); font-size: .82rem; }
+
+  /* ---------- timeline list ---------- */
+  .day { font-size: .78rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 18px 0 8px; }
+  .ev { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; margin-bottom: 8px; }
+  .ev .time { text-align: center; min-width: 64px; padding-right: 14px; border-right: 1px solid var(--line); }
+  .ev .time b { display: block; font-size: 1rem; }
+  .ev .time span { font-size: .75rem; color: var(--muted); }
+  .ev .t { font-weight: 650; }
+  .ev .right { text-align: right; }
+  .ev .count { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .b-live { background: var(--live-soft); color: var(--live); }
+  .b-soon { background: var(--soon-soft); color: var(--soon); }
+  .b-up { background: var(--accent-soft); color: var(--accent); }
+  .b-done, .b-tba { background: var(--surface-2); color: var(--done); border: 1px solid var(--line); }
+  .b-acct { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
+  .b-muted { background: var(--danger-soft); color: var(--danger); }
+
+  /* ---------- competition cards ---------- */
+  .comps { display: grid; gap: 16px; }
+  .comp-head { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px 0; }
+  .avatar { flex: none; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 1.1rem; }
+  .comp-head h3 { margin: 0; font-size: 1.08rem; line-height: 1.3; }
+  .comp-head .org { color: var(--muted); font-size: .85rem; }
+  .comp-head .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .nextline { margin: 12px 20px 0; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); font-size: .88rem; }
+  .rounds { list-style: none; margin: 14px 20px 4px; padding: 0; position: relative; }
+  .rounds li { position: relative; padding: 0 0 14px 26px; }
+  .rounds li::before { content: ""; position: absolute; left: 6px; top: 18px; bottom: -2px; width: 2px; background: var(--line); }
+  .rounds li:last-child::before { display: none; }
+  .rounds .dotc { position: absolute; left: 0; top: 4px; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid var(--done); background: var(--surface); }
+  .rounds .live .dotc { border-color: var(--live); background: var(--live); box-shadow: 0 0 0 4px var(--live-soft); }
+  .rounds .up .dotc, .rounds .soon .dotc { border-color: var(--accent); }
+  .rounds .done .dotc { background: var(--done); }
+  .rounds .done .rt { color: var(--muted); }
+  .rounds .rt { font-weight: 600; font-size: .92rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .rounds .rd { font-size: .82rem; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); margin-top: 6px; background: var(--surface-2);
+             border-radius: 0 0 var(--radius) var(--radius); }
+  .inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 14px 20px; border-top: 1px dashed var(--line); }
+  .inline-form label { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); font-weight: 600; }
+  input.field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-width: 0; outline: none; }
+  input.field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  details.past { margin-top: 26px; }
+  details.past > summary { cursor: pointer; font-weight: 600; color: var(--muted); padding: 8px 0; }
+  details.past .comps { margin-top: 10px; opacity: .72; }
+
+  /* ---------- accounts ---------- */
+  .acct { display: flex; align-items: center; gap: 14px; padding: 16px 18px; flex-wrap: wrap; }
+  .acct + .acct { border-top: 1px solid var(--line); }
+  .acct .info { flex: 1 1 200px; }
+  .steps { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .step { padding: 18px; }
+  .step .num { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; margin-bottom: 10px;
+               background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .step p { margin: 6px 0 0; color: var(--muted); font-size: .88rem; }
+  .bookmarklet { display: inline-flex; margin-top: 10px; padding: 8px 14px; border-radius: 10px; font-weight: 700; text-decoration: none; cursor: grab;
+                 background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: 2px dashed rgba(255,255,255,.5); }
+  .note { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); font-size: .85rem; color: var(--muted); }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; font-size: .78rem; background: var(--surface); }
+
+  /* ---------- settings ---------- */
+  .opt-group { padding: 20px; }
+  .opt-group + .opt-group { border-top: 1px solid var(--line); }
+  .opt-group h3 { margin: 0 0 2px; font-size: 1rem; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .toggle { border: 1.5px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 14px; cursor: pointer; font-weight: 600; font-size: .88rem; color: var(--muted); }
+  .toggle.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .toggle.on::before { content: "✓ "; }
+  .tools { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .tool { padding: 18px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .tool .ic { font-size: 1.4rem; }
+  .tool p { margin: 0 0 8px; color: var(--muted); font-size: .86rem; flex: 1; }
+
+  /* ---------- dialogs & toast ---------- */
+  dialog { border: 0; border-radius: 20px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--ink);
+           box-shadow: 0 24px 60px rgba(0,0,0,.3); }
+  dialog::backdrop { background: rgba(15,17,32,.45); backdrop-filter: blur(3px); }
+  dialog form { padding: 24px; display: grid; gap: 14px; }
+  dialog h3 { margin: 0; font-size: 1.2rem; }
+  dialog label { display: grid; gap: 6px; font-weight: 600; font-size: .88rem; }
+  dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .err { color: var(--danger); font-size: .88rem; background: var(--danger-soft); padding: 8px 12px; border-radius: 10px; }
+  .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50;
+           background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 12px; font-size: .9rem; font-weight: 600;
+           box-shadow: 0 10px 30px rgba(0,0,0,.25); max-width: calc(100vw - 32px); }
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty .big { font-size: 2.2rem; }
+
+  @media (max-width: 560px) {
+    .topbar-inner, main { padding-inline: 16px; }
+    .ev { grid-template-columns: 1fr auto; }
+    .ev .time { display: none; }
+    .hero { padding: 20px; }
+    .cd div { min-width: 58px; }
+    .btn-label { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brandrow">
+      <div class="logo">⏰</div>
+      <div class="brand">Unstop Reminder</div>
+      <span class="pill" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></span>
+      <div class="spacer"></div>
+      <button class="btn" id="syncBtn" title="Check Unstop for new registrations and date changes">🔄 <span class="btn-label">Sync now</span></button>
+      <button class="btn primary" id="openAdd">＋ <span class="btn-label">Add competition</span></button>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab" data-tab="dashboard">🏠 Dashboard</button>
+      <button class="tab" data-tab="competitions">🏆 Competitions <span class="n" id="nComps">0</span></button>
+      <button class="tab" data-tab="accounts">👤 Accounts <span class="n" id="nAccts">0</span></button>
+      <button class="tab" data-tab="settings">⚙️ Settings</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- DASHBOARD -->
+  <section data-panel="dashboard">
+    <div class="chips" id="chips1"></div>
+    <div id="hero"></div>
+    <div class="stats" id="stats"></div>
+    <h2>📅 Coming up</h2>
+    <div id="timeline"></div>
+  </section>
+
+  <!-- COMPETITIONS -->
+  <section data-panel="competitions" hidden>
+    <div class="chips" id="chips2"></div>
+    <div class="comps" id="comps"></div>
+    <div id="past"></div>
+  </section>
+
+  <!-- ACCOUNTS -->
+  <section data-panel="accounts" hidden>
+    <h2>Connected Unstop accounts</h2>
+    <div class="card" id="accountList"></div>
+
+    <h2>Connect an account <span class="muted small">(once per account)</span></h2>
+    <div class="steps">
+      <div class="card step"><div class="num">1</div><b>Add the bookmark</b>
+        <p>Show the bookmarks bar with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>, then drag this button onto it:</p>
+        <a class="bookmarklet" id="bookmarklet" href="#">⏰ Connect to Reminder</a></div>
+      <div class="card step"><div class="num">2</div><b>Log in to Unstop</b>
+        <p>Open <a href="https://unstop.com" target="_blank" rel="noopener">unstop.com</a> and log in with the account you want to connect.</p></div>
+      <div class="card step"><div class="num">3</div><b>Click the bookmark</b>
+        <p>Click <b>⏰ Connect to Reminder</b>. This app opens; name the account and press Connect.</p></div>
+      <div class="card step"><div class="num">4</div><b>Second account?</b>
+        <p>Log out of Unstop, log in with the other account, and click the bookmark again.</p></div>
+    </div>
+    <div class="note">🔒 Only your Unstop login token is stored, on this PC in <code>accounts.json</code>, never your password.
+      If you log out of Unstop the connection may stop; you'll get a notification to reconnect.</div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section data-panel="settings" hidden>
+    <h2>🔔 When should I remind you?</h2>
+    <div class="card">
+      <div class="opt-group">
+        <h3>Before a round starts</h3>
+        <div class="muted small">Tap to turn each reminder on or off.</div>
+        <div class="toggles" id="startToggles"></div>
+      </div>
+      <div class="opt-group">
+        <h3>Before a round closes</h3>
+        <div class="muted small">Useful for submission deadlines.</div>
+        <div class="toggles" id="endToggles"></div>
+      </div>
+    </div>
+
+    <h2>🧰 Tools</h2>
+    <div class="tools">
+      <div class="card tool"><div class="ic">🔔</div><b>Test notification</b>
+        <p>Check that Windows notifications show up. Look at the bottom-right of your screen.</p>
+        <button class="btn" id="test">Send test</button></div>
+      <div class="card tool"><div class="ic">📱</div><b>Export to calendar</b>
+        <p>Download an .ics file with all upcoming rounds. Import it into Google Calendar to get alerts on your phone.</p>
+        <button class="btn" id="ics">Download .ics</button></div>
+      <div class="card tool"><div class="ic">🔄</div><b>Sync with Unstop</b>
+        <p>Runs automatically every 6 hours. Picks up new registrations and changed dates.</p>
+        <button class="btn" id="syncBtn2">Sync now</button></div>
+    </div>
+    <div class="note">ℹ️ Reminders come from a small program running in the background on this PC. It starts automatically when you log in to Windows, so they work even with this page closed.</div>
+  </section>
+</main>
+
+<!-- Add competition dialog -->
+<dialog id="addDialog">
+  <form id="addForm">
+    <h3>＋ Add a competition</h3>
+    <div class="muted small">Open the competition on Unstop, copy the link from the address bar and paste it here.</div>
+    <label>Unstop link
+      <input class="field" id="url" placeholder="https://unstop.com/competitions/…" required autocomplete="off"></label>
+    <label>Account <span class="muted small" style="font-weight:400">(optional: which Unstop ID you registered with)</span>
+      <input class="field" id="account" list="accountNames" placeholder="e.g. college" autocomplete="off"></label>
+    <datalist id="accountNames"></datalist>
+    <div class="err" id="addErr" hidden></div>
+    <div class="row">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="addBtn">Add competition</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Connect account dialog (opened by the bookmark) -->
+<dialog id="connectDialog">
+  <form id="connectForm">
+    <h3>👤 Connect this Unstop account</h3>
+    <div class="muted small">Give it a name so you can tell your accounts apart.</div>
+    <label>Account name
+      <input class="field" id="connectLabel" placeholder="e.g. main / college" required autocomplete="off"></label>
+    <div class="err" id="connectErr" hidden></div>
+    <div class="row">
+      <button type="button" class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="connectBtn">Connect</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+let data = { competitions: [], settings: { startOffsets: [], endOffsets: [] }, accounts: [] };
+let filter = "All";
+let armedDelete = null;
+let tab = "dashboard";
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Request failed");
+  return json;
+}
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2800);
+}
+
+// ---------- time helpers ----------
+const fmt = d => d.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+const fmtTime = d => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const DAY = 864e5;
+function countdown(ms) {
+  const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${mm}m`;
+  return `${mm}m ${Math.floor(ms / 1000) % 60}s`;
+}
+function dayLabel(t) {
+  const d = new Date(t), today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - today) / DAY);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+}
+const offsetLabel = m => m >= 10080 && m % 10080 === 0 ? `${m / 10080} week${m > 10080 ? "s" : ""}`
+  : m >= 1440 && m % 1440 === 0 ? `${m / 1440} day${m > 1440 ? "s" : ""}`
+  : m >= 60 && m % 60 === 0 ? `${m / 60} hour${m > 60 ? "s" : ""}` : `${m} min`;
+const PRESETS = [10080, 4320, 1440, 720, 360, 180, 120, 60, 30, 15, 5];
+
+function roundState(r, now = Date.now()) {
+  const s = r.start ? Date.parse(r.start) : null, e = r.end ? Date.parse(r.end) : null;
+  if (!s) return { key: "tba", badge: "Date TBA" };
+  if (now < s) return { key: s - now < DAY ? "soon" : "up", badge: s - now < DAY ? "Starts soon" : "Upcoming", verb: "Starts", target: s };
+  if (e && now < e) return { key: "live", badge: "Live now", verb: "Closes", target: e };
+  return { key: "done", badge: "Ended" };
+}
+const badgeCls = { live: "b-live", soon: "b-soon", up: "b-up", done: "b-done", tba: "b-tba" };
+
+function avatarColor(s) {
+  let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `linear-gradient(135deg, hsl(${h} 70% 55%), hsl(${(h + 40) % 360} 70% 45%))`;
+}
+const initials = s => String(s).replace(/[^A-Za-z0-9 ]/g, " ").trim().split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
+
+// ---------- data views ----------
+const accountNames = () => [...new Set(data.competitions.map(c => c.account).filter(Boolean))];
+const inFilter = c => filter === "All" || c.account === filter;
+const active = () => data.competitions.filter(c => !c.hidden && inFilter(c));
+const past = () => data.competitions.filter(c => c.hidden && inFilter(c));
+function events(now = Date.now()) {
+  return active().filter(c => !c.muted)
+    .flatMap(c => c.rounds.map(r => ({ c, r, st: roundState(r, now) })))
+    .filter(x => x.st.target)
+    .sort((a, b) => (b.st.key === "live") - (a.st.key === "live") || a.st.target - b.st.target);  // live rounds first
+}
+
+// ---------- rendering ----------
+function render() {
+  const names = accountNames();
+  if (filter !== "All" && !names.includes(filter)) filter = "All";
+  $("#accountNames").innerHTML = names.map(a => `<option value="${esc(a)}">`).join("");
+  const chips = names.length > 1
+    ? `<span class="muted small" style="font-weight:600">Show:</span>` + ["All", ...names].map(a =>
+        `<button class="chip ${a === filter ? "on" : ""}" data-filter="${esc(a)}">${a === "All" ? "All accounts" : esc(a)}</button>`).join("")
+    : "";
+  $("#chips1").innerHTML = $("#chips2").innerHTML = chips;
+  $("#chips1").hidden = $("#chips2").hidden = !chips;
+
+  $("#nComps").textContent = data.competitions.filter(c => !c.hidden).length;
+  $("#nAccts").textContent = (data.accounts || []).length;
+
+  renderDashboard();
+  renderCompetitions();
+  renderAccounts();
+  renderSettings();
+}
+
+function renderDashboard() {
+  const now = Date.now(), ev = events(now), next = ev[0];
+  $("#hero").innerHTML = next ? `
+    <div class="hero ${next.st.key === "live" ? "live" : ""}">
+      <div class="eyebrow">${next.st.key === "live" ? "🟢 Live now · closes in" : "⏭ Next round starts in"}</div>
+      <div class="cd" data-cd="${next.st.target}">${cdBoxes(next.st.target - now)}</div>
+      <h3>${esc(next.r.title)}</h3>
+      <div class="sub">${esc(next.c.title)}${next.c.account ? ` · ${esc(next.c.account)}` : ""}</div>
+      <div class="sub small" style="margin-top:4px">📅 ${fmt(new Date(next.st.target))}</div>
+      <div style="margin-top:16px"><a class="btn" href="${esc(next.c.url)}" target="_blank" rel="noopener">Open on Unstop ↗</a></div>
+    </div>`
+    : `<div class="card hero-empty">
+         <div style="font-size:2.4rem">🎉</div><h3 style="margin:8px 0 4px">No upcoming rounds</h3>
+         <div class="muted">Connect your Unstop account or add a competition to get reminders.</div>
+         <div style="margin-top:16px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
+           <button class="btn primary" data-goto="accounts">👤 Connect account</button>
+           <button class="btn" data-open-add>＋ Add competition</button></div>
+       </div>`;
+
+  const week = ev.filter(x => x.st.key === "live" || x.st.target - now < 7 * DAY).length;
+  const s = data.settings;
+  $("#stats").innerHTML = [
+    ["🏆", active().length, "Active competitions", "competitions"],
+    ["📆", week, "Rounds in the next 7 days", null],
+    ["🟢", ev.filter(x => x.st.key === "live").length, "Live right now", null],
+    ["🔔", (s.startOffsets.length + s.endOffsets.length), "Reminders per round", "settings"],
+  ].map(([ic, v, l, go]) => `<div class="card stat" ${go ? `data-goto="${go}" style="cursor:pointer"` : ""}>
+      <div class="v">${ic} ${v}</div><div class="l">${l}</div></div>`).join("");
+
+  let lastDay = "", html = "";
+  for (const { c, r, st } of ev.slice(1, 25)) {
+    const dl = st.key === "live" ? "Live now" : dayLabel(st.target);
+    if (dl !== lastDay) { html += `<div class="day">${dl}</div>`; lastDay = dl; }
+    const d = new Date(st.target);
+    html += `<div class="card ev">
+      <div class="time"><b>${fmtTime(d)}</b><span>${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span></div>
+      <div><div class="t">${esc(r.title)}</div>
+        <div class="muted small">${esc(c.title)} ${c.account ? `<span class="badge b-acct">${esc(c.account)}</span>` : ""}</div></div>
+      <div class="right"><span class="badge ${badgeCls[st.key]}">${st.verb} in</span>
+        <div class="count" data-count="${st.target}">${countdown(st.target - now)}</div></div>
+    </div>`;
+  }
+  $("#timeline").innerHTML = html || `<div class="card empty small">Nothing else scheduled yet.</div>`;
+}
+
+function cdBoxes(ms) {
+  ms = Math.max(0, ms);
+  const parts = [[Math.floor(ms / DAY), "days"], [Math.floor(ms / 36e5) % 24, "hours"], [Math.floor(ms / 6e4) % 60, "mins"], [Math.floor(ms / 1e3) % 60, "secs"]];
+  return parts.map(([v, l]) => `<div><b>${String(v).padStart(2, "0")}</b><span>${l}</span></div>`).join("");
+}
+
+function compCard(c) {
+  const now = Date.now();
+  const rounds = [...c.rounds].sort((a, b) => (Date.parse(a.start) || Infinity) - (Date.parse(b.start) || Infinity));
+  const nxt = rounds.map(r => ({ r, st: roundState(r, now) })).find(x => x.st.target);
+  const id = esc(c.id);
+  return `
+  <article class="card">
+    <div class="comp-head">
+      <div class="avatar" style="background:${avatarColor(c.title)}">${esc(initials(c.title))}</div>
+      <div style="flex:1; min-width:0">
+        <h3>${esc(c.title)}</h3>
+        <div class="org">${esc(c.org)}</div>
+        <div class="tags">
+          ${c.account ? `<span class="badge b-acct">👤 ${esc(c.account)}</span>` : ""}
+          ${c.muted ? `<span class="badge b-muted">🔕 Reminders off</span>` : ""}
+          ${c.hidden ? `<span class="badge b-done">${c.hidden === "ended" ? "Ended" : "Not shortlisted"}</span>` : ""}
+        </div>
+      </div>
+    </div>
+    ${nxt ? `<div class="nextline">⏭ <b>${esc(nxt.r.title)}</b> ${nxt.st.verb.toLowerCase()} in <b data-count="${nxt.st.target}">${countdown(nxt.st.target - now)}</b>
+      <span class="muted">· ${fmt(new Date(nxt.st.target))}</span></div>` : ""}
+    <ul class="rounds">
+      ${rounds.map(r => { const st = roundState(r, now); return `
+        <li class="${st.key}"><span class="dotc"></span>
+          <div class="rt">${esc(r.title)} <span class="badge ${badgeCls[st.key]}">${st.badge}</span>
+            ${r.source !== "unstop" ? `<span class="badge b-tba">added by you</span>
+              <button class="btn sm ghost danger" data-delround="${id}|${esc(r.id)}">✕ Remove</button>` : ""}</div>
+          <div class="rd">${r.start ? fmt(new Date(r.start)) : "Date to be announced"}${r.end ? ` → ${fmt(new Date(r.end))}` : ""}</div>
+        </li>`; }).join("") || `<li class="tba"><span class="dotc"></span><div class="rd">No rounds published yet. Sync later or add one yourself.</div></li>`}
+    </ul>
+    <div class="actions">
+      <a class="btn sm" href="${esc(c.url)}" target="_blank" rel="noopener">↗ Open on Unstop</a>
+      <button class="btn sm" data-addround="${id}">＋ Add round</button>
+      <button class="btn sm" data-setacct="${id}">👤 ${c.account ? "Change account" : "Set account"}</button>
+      <button class="btn sm" data-mute="${id}">${c.muted ? "🔔 Turn reminders on" : "🔕 Mute reminders"}</button>
+      <button class="btn sm danger ${armedDelete === c.id ? "armed" : ""}" data-del="${id}">🗑 ${armedDelete === c.id ? "Click again to remove" : "Remove"}</button>
+    </div>
+    <form class="inline-form" data-roundform="${id}" hidden>
+      <label>Round name <input class="field" name="title" placeholder="e.g. Final presentation" required></label>
+      <label>Starts <input class="field" type="datetime-local" name="start" required></label>
+      <label>Closes (optional) <input class="field" type="datetime-local" name="end"></label>
+      <button class="btn primary sm">Save round</button>
+    </form>
+    <form class="inline-form" data-acctform="${id}" hidden>
+      <label style="flex:1">Account name <input class="field" name="account" list="accountNames" placeholder="e.g. college" value="${esc(c.account)}"></label>
+      <button class="btn primary sm">Save</button>
+    </form>
+  </article>`;
+}
+
+function renderCompetitions() {
+  const a = active(), p = past();
+  $("#comps").innerHTML = a.length ? a.map(compCard).join("") : `
+    <div class="card empty"><div class="big">🏆</div><b>No active competitions</b>
+      <div class="small" style="margin:6px 0 14px">Connect your Unstop account to import them automatically, or add one by link.</div>
+      <button class="btn primary" data-goto="accounts">👤 Connect account</button> <button class="btn" data-open-add>＋ Add competition</button></div>`;
+  $("#past").innerHTML = p.length ? `<details class="past"><summary>📦 Ended or not shortlisted (${p.length}). No reminders for these</summary>
+    <div class="comps">${p.map(compCard).join("")}</div></details>` : "";
+}
+
+function renderAccounts() {
+  const conn = data.accounts || [];
+  $("#accountList").innerHTML = conn.length ? conn.map(a => {
+    const ok = a.status === "ok", exp = a.status === "expired";
+    return `<div class="acct">
+      <div class="avatar" style="background:${avatarColor(a.label)}">${esc(initials(a.label))}</div>
+      <div class="info"><b>${esc(a.label)}</b>
+        <span class="badge ${ok ? "b-live" : "b-soon"}">${ok ? "✓ Connected" : exp ? "Login expired" : "Error"}</span>
+        <div class="muted small">${exp ? "Log in to Unstop with this account and click the bookmark again." : !ok ? esc(a.status) :
+          a.lastSync ? `Last checked ${fmt(new Date(a.lastSync))} · ${a.found ?? 0} registrations found` : ""}</div></div>
+      <button class="btn sm danger" data-disconnect="${esc(a.label)}">Disconnect</button>
+    </div>`; }).join("")
+    : `<div class="empty"><div class="big">👤</div><b>No accounts connected yet</b>
+        <div class="small">Follow the steps below. Your registered competitions get added automatically.</div></div>`;
+}
+
+function renderSettings() {
+  const toggles = (key) => {
+    const cur = data.settings[key];
+    const opts = [...new Set([...PRESETS, ...cur])].sort((a, b) => b - a);
+    return opts.map(m => `<button class="toggle ${cur.includes(m) ? "on" : ""}" data-offset="${key}|${m}">${offsetLabel(m)} before</button>`).join("");
+  };
+  $("#startToggles").innerHTML = toggles("startOffsets");
+  $("#endToggles").innerHTML = toggles("endOffsets");
+}
+
+function switchTab(t) {
+  tab = t; store.set("tab", t);
+  $$(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  $$("section[data-panel]").forEach(s => s.hidden = s.dataset.panel !== t);
+  window.scrollTo({ top: 0 });
+}
+
+// live countdowns without re-rendering the page
+function tick() {
+  const now = Date.now();
+  $$("[data-count]").forEach(el => el.textContent = countdown(+el.dataset.count - now));
+  $$("[data-cd]").forEach(el => el.innerHTML = cdBoxes(+el.dataset.cd - now));
+  if ($$("[data-count],[data-cd]").some(el => +(el.dataset.count || el.dataset.cd) <= now)) render();
+}
+
+async function save() {
+  data = await api("/api/save", { competitions: data.competitions, settings: data.settings });
+  render();
+}
+const findComp = id => data.competitions.find(c => c.id === id);
+
+// ---------- events ----------
+$("#tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) switchTab(b.dataset.tab); });
+$$("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+$("#openAdd").onclick = () => { $("#addErr").hidden = true; $("#addDialog").showModal(); $("#url").focus(); };
+
+$("#addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = $("#addBtn"), err = $("#addErr");
+  btn.disabled = true; btn.textContent = "Fetching from Unstop…"; err.hidden = true;
+  try {
+    const before = new Set(data.competitions.map(c => c.id));
+    const url = $("#url").value;
+    data = await api("/api/add", { url });
+    const acct = $("#account").value.trim();
+    const added = data.competitions.find(c => !before.has(c.id)) || data.competitions.find(c => c.unstopId === (url.match(/\d{5,}/g) || []).pop());
+    if (added && acct) { added.account = acct; await save(); }
+    $("#url").value = ""; $("#addDialog").close(); render(); switchTab("competitions");
+    toast(added ? `Added "${added.title}" (${added.rounds.length} round${added.rounds.length === 1 ? "" : "s"})` : "Updated");
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+  btn.disabled = false; btn.textContent = "Add competition";
+});
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button, [data-goto]"); if (!b) return;
+  const d = b.dataset;
+  if (d.goto) switchTab(d.goto);
+  else if ("openAdd" in d) $("#openAdd").click();
+  else if (d.filter) { filter = d.filter; render(); }
+  else if (d.addround) { const f = document.querySelector(`[data-roundform="${CSS.escape(d.addround)}"]`); f.hidden = !f.hidden; if (!f.hidden) f.elements.title.focus(); }
+  else if (d.setacct) { const f = document.querySelector(`[data-acctform="${CSS.escape(d.setacct)}"]`); f.hidden = !f.hidden; if (!f.hidden) f.elements.account.focus(); }
+  else if (d.mute) { const c = findComp(d.mute); c.muted = !c.muted; await save(); toast(c.muted ? "Reminders muted for this competition" : "Reminders turned on"); }
+  else if (d.del) {
+    if (armedDelete !== d.del) { armedDelete = d.del; render(); setTimeout(() => { if (armedDelete === d.del) { armedDelete = null; render(); } }, 4000); return; }
+    data.competitions = data.competitions.filter(c => c.id !== d.del); armedDelete = null; await save(); toast("Removed. It won't be re-added");
+  } else if (d.disconnect) {
+    data = await api("/api/disconnect", { label: d.disconnect }); render(); toast("Account disconnected");
+  } else if (d.delround) {
+    const [cid, rid] = d.delround.split("|"); const c = findComp(cid);
+    c.rounds = c.rounds.filter(r => r.id !== rid); await save(); toast("Round removed");
+  } else if (d.offset) {
+    const [key, m] = d.offset.split("|"), list = data.settings[key], v = +m;
+    data.settings[key] = list.includes(v) ? list.filter(x => x !== v) : [...list, v].sort((a, b) => b - a);
+    await save(); toast(`${list.includes(v) ? "Removed" : "Added"} reminder: ${offsetLabel(v)} before`);
+  }
+});
+
+document.addEventListener("submit", async e => {
+  const f = e.target;
+  if (f.dataset.roundform) {
+    e.preventDefault();
+    const c = findComp(f.dataset.roundform), v = Object.fromEntries(new FormData(f));
+    c.rounds.push({ id: "m" + Date.now(), title: v.title, start: new Date(v.start).toISOString(),
+                    end: v.end ? new Date(v.end).toISOString() : null, source: "manual" });
+    await save(); toast("Round added");
+  } else if (f.dataset.acctform) {
+    e.preventDefault();
+    findComp(f.dataset.acctform).account = new FormData(f).get("account").trim();
+    await save(); toast("Account updated");
+  }
+});
+
+$("#test").onclick = async () => { await api("/api/test", {}); toast("Sent! Check the bottom-right of your screen"); };
+async function sync(btn) {
+  const label = btn.innerHTML; btn.disabled = true; btn.textContent = "Syncing…";
+  try { data = await api("/api/refresh", {}); render(); toast("Synced with Unstop"); }
+  catch (ex) { toast(ex.message); }
+  btn.disabled = false; btn.innerHTML = label;
+}
+$("#syncBtn").onclick = () => sync($("#syncBtn"));
+$("#syncBtn2").onclick = () => sync($("#syncBtn2"));
+
+$("#ics").onclick = () => {
+  const stamp = d => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const icsEsc = s => String(s || "").replace(/[\\;,]/g, m => "\\" + m).replace(/\n/g, "\\n");
+  const alarms = offs => offs.map(m => `BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Reminder\r\nTRIGGER:-PT${m}M\r\nEND:VALARM`).join("\r\n");
+  const ev = [];
+  for (const c of active().filter(c => !c.muted)) for (const r of c.rounds) {
+    if (!r.start || (r.end ? Date.parse(r.end) : Date.parse(r.start)) < Date.now()) continue;
+    const long = r.end && Date.parse(r.end) - Date.parse(r.start) > DAY;
+    // multi-day rounds become two short events (opens / deadline) so the calendar isn't blocked for days
+    const parts = long
+      ? [[r.start, "opens", data.settings.startOffsets], [r.end, "deadline", data.settings.endOffsets]]
+      : [[r.start, "", data.settings.startOffsets]];
+    for (const [t, tag, offs] of parts) {
+      const endT = !long && r.end ? r.end : new Date(Date.parse(t) + 30 * 60000).toISOString();
+      ev.push(["BEGIN:VEVENT", `UID:${c.id}-${r.id}-${tag || "x"}@unstop-reminder`, `DTSTAMP:${stamp(Date.now())}`,
+        `DTSTART:${stamp(t)}`, `DTEND:${stamp(endT)}`,
+        `SUMMARY:${icsEsc(`${r.title}${tag ? " (" + tag + ")" : ""}: ${c.title}`)}`,
+        `DESCRIPTION:${icsEsc((c.account ? "Account: " + c.account + "\n" : "") + c.url)}`, `URL:${c.url}`,
+        alarms(offs), "END:VEVENT"].join("\r\n"));
+    }
+  }
+  if (!ev.length) return toast("No upcoming rounds to export");
+  const ics = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Unstop Reminder//EN\r\n${ev.join("\r\n")}\r\nEND:VCALENDAR\r\n`;
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([ics], { type: "text/calendar" })), download: "unstop-rounds.ics" });
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Calendar file downloaded");
+};
+
+// ---------- connecting an Unstop account (token arrives from the bookmarklet in the URL hash) ----------
+$("#bookmarklet").href = "javascript:" + encodeURIComponent(`(()=>{const t=localStorage.getItem('accessToken');` +
+  `if(!/(^|\\.)unstop\\.com$/.test(location.hostname)||!t){alert('Open unstop.com and log in first, then click this bookmark.');return}` +
+  `window.open('http://127.0.0.1:8765/#connect='+encodeURIComponent(t),'_blank')})()`);
+$("#bookmarklet").addEventListener("click", e => { e.preventDefault(); toast("Drag this button onto your bookmarks bar"); });
+
+let pendingToken = null;
+if (location.hash.startsWith("#connect=")) {
+  pendingToken = decodeURIComponent(location.hash.slice(9));
+  history.replaceState(null, "", location.pathname);  // don't leave the token in the address bar
+  $("#connectDialog").showModal();
+}
+$("#connectDialog").addEventListener("close", () => { pendingToken = null; });
+$("#connectForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = $("#connectBtn"), err = $("#connectErr");
+  btn.disabled = true; btn.textContent = "Checking your registrations…"; err.hidden = true;
+  try {
+    const before = data.competitions.length;
+    data = await api("/api/connect", { token: pendingToken, label: $("#connectLabel").value });
+    $("#connectDialog").close(); render(); switchTab("competitions");
+    toast(`Connected. ${data.competitions.length - before} competition(s) added`);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+  btn.disabled = false; btn.textContent = "Connect";
+});
+
+// ---------- boot ----------
+(async function boot() {
+  switchTab(new URLSearchParams(location.search).get("tab") || store.get("tab") || "dashboard");
+  try {
+    data = await api("/api/data"); render();
+    $("#statusText").textContent = "Reminders on";
+  } catch {
+    $("#status").classList.add("off");
+    $("#statusText").textContent = "App not running: double-click start.bat";
+  }
+  setInterval(tick, 1000);
+  setInterval(async () => { try { data = await api("/api/data"); render(); } catch {} }, 5 * 60000);
+})();
+</script>
+</body>
+</html>

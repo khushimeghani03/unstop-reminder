@@ -1,0 +1,8 @@
+# Private: your Unstop login tokens and personal registration data
+accounts.json
+data.json
+last_sync_debug.json
+*.tmp
+
+__pycache__/
+*.pyc
