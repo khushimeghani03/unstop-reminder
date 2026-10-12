@@ -1,0 +1,6 @@
+{
+  "rewrites": [{ "source": "/api/:path*", "destination": "/api/index" }],
+  "functions": { "api/index.py": { "maxDuration": 60 } },
+  "crons": [{ "path": "/api/cron", "schedule": "30 2 * * *" }],
+  "headers": [{ "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }]
+}

@@ -2,6 +2,7 @@
 accounts.json
 data.json
 last_sync_debug.json
+local_store.json
 *.tmp
 
 __pycache__/

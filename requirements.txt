@@ -1,0 +1,2 @@
+# Only needed for the Vercel version (api/index.py). The local server.py uses the standard library.
+pywebpush>=2.0,<3

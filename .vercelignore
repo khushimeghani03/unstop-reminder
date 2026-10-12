@@ -1,0 +1,8 @@
+# Local-only files: keep them out of Vercel deployments
+server.py
+start.bat
+accounts.json
+data.json
+last_sync_debug.json
+local_store.json
+__pycache__/

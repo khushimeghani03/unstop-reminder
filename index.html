@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Unstop Round Reminder</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#5b4bff">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <style>
   :root {
     --bg: #f4f5fb; --surface: #ffffff; --surface-2: #f7f8fc; --ink: #161a2e; --muted: #687089; --line: #e6e8f2;
@@ -257,7 +261,7 @@
       <div class="card step"><div class="num">4</div><b>Second account?</b>
         <p>Log out of Unstop, log in with the other account, and click the bookmark again.</p></div>
     </div>
-    <div class="note">🔒 Only your Unstop login token is stored, on this PC in <code>accounts.json</code>, never your password.
+    <div class="note">🔒 Only your Unstop login token is stored, never your Unstop password.
       If you log out of Unstop the connection may stop; you'll get a notification to reconnect.</div>
   </section>
 
@@ -279,8 +283,11 @@
 
     <h2>🧰 Tools</h2>
     <div class="tools">
+      <div class="card tool" id="pushTool" hidden><div class="ic">📲</div><b>Notifications on this device</b>
+        <p id="pushText">Turn on notifications on each phone or computer where you want reminders.</p>
+        <button class="btn primary" id="pushBtn">Turn on</button></div>
       <div class="card tool"><div class="ic">🔔</div><b>Test notification</b>
-        <p>Check that Windows notifications show up. Look at the bottom-right of your screen.</p>
+        <p id="testText">Check that Windows notifications show up. Look at the bottom-right of your screen.</p>
         <button class="btn" id="test">Send test</button></div>
       <div class="card tool"><div class="ic">📱</div><b>Export to calendar</b>
         <p>Download an .ics file with all upcoming rounds. Import it into Google Calendar to get alerts on your phone.</p>
@@ -289,7 +296,7 @@
         <p>Runs automatically every 6 hours. Picks up new registrations and changed dates.</p>
         <button class="btn" id="syncBtn2">Sync now</button></div>
     </div>
-    <div class="note">ℹ️ Reminders come from a small program running in the background on this PC. It starts automatically when you log in to Windows, so they work even with this page closed.</div>
+    <div class="note" id="howNote">ℹ️ Reminders come from a small program running in the background on this PC. It starts automatically when you log in to Windows, so they work even with this page closed.</div>
   </section>
 </main>
 
@@ -326,6 +333,18 @@
   </form>
 </dialog>
 
+<!-- Password dialog (hosted version only) -->
+<dialog id="loginDialog">
+  <form id="loginForm">
+    <h3>🔒 Enter your app password</h3>
+    <div class="muted small">The password you set as <code>APP_PASSWORD</code> in Vercel. This browser remembers it.</div>
+    <label>Password
+      <input class="field" id="loginPassword" type="password" required autocomplete="current-password"></label>
+    <div class="err" id="loginErr" hidden></div>
+    <div class="row"><button class="btn primary" id="loginBtn">Sign in</button></div>
+  </form>
+</dialog>
+
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -341,10 +360,13 @@ const store = { get(k) { try { return localStorage.getItem(k); } catch { return 
                 set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 
 async function api(path, body) {
-  const res = await fetch(path, body === undefined ? {} : {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  const headers = { "X-App-Key": store.get("appKey") || "" };
+  const res = await fetch(path, body === undefined ? { headers } : {
+    method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body)
   });
-  const json = await res.json();
+  let json;
+  try { json = await res.json(); } catch { throw new Error(`Server error (${res.status})`); }
+  if (res.status === 401) askPassword();
   if (!res.ok) throw new Error(json.error || "Request failed");
   return json;
 }
@@ -422,6 +444,7 @@ function render() {
   renderCompetitions();
   renderAccounts();
   renderSettings();
+  renderPush();
 }
 
 function renderDashboard() {
@@ -643,7 +666,12 @@ document.addEventListener("submit", async e => {
   }
 });
 
-$("#test").onclick = async () => { await api("/api/test", {}); toast("Sent! Check the bottom-right of your screen"); };
+$("#test").onclick = async () => {
+  try {
+    const r = await api("/api/test", {});
+    toast(data.hosted ? `Sent to ${r.sent} device${r.sent === 1 ? "" : "s"}` : "Sent! Check the bottom-right of your screen");
+  } catch (ex) { toast(ex.message); }
+};
 async function sync(btn) {
   const label = btn.innerHTML; btn.disabled = true; btn.textContent = "Syncing…";
   try { data = await api("/api/refresh", {}); render(); toast("Synced with Unstop"); }
@@ -685,7 +713,7 @@ $("#ics").onclick = () => {
 // ---------- connecting an Unstop account (token arrives from the bookmarklet in the URL hash) ----------
 $("#bookmarklet").href = "javascript:" + encodeURIComponent(`(()=>{const t=localStorage.getItem('accessToken');` +
   `if(!/(^|\\.)unstop\\.com$/.test(location.hostname)||!t){alert('Open unstop.com and log in first, then click this bookmark.');return}` +
-  `window.open('http://127.0.0.1:8765/#connect='+encodeURIComponent(t),'_blank')})()`);
+  `window.open(${JSON.stringify(location.origin + "/#connect=")}+encodeURIComponent(t),'_blank')})()`);
 $("#bookmarklet").addEventListener("click", e => { e.preventDefault(); toast("Drag this button onto your bookmarks bar"); });
 
 let pendingToken = null;
@@ -708,16 +736,92 @@ $("#connectForm").addEventListener("submit", async e => {
   btn.disabled = false; btn.textContent = "Connect";
 });
 
+// ---------- password (hosted version) ----------
+function askPassword() {
+  if (!$("#loginDialog").open) { $("#loginErr").hidden = true; $("#loginDialog").showModal(); $("#loginPassword").focus(); }
+}
+$("#loginDialog").addEventListener("cancel", e => e.preventDefault());  // nothing works without it
+$("#loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  store.set("appKey", $("#loginPassword").value);
+  $("#loginDialog").close();
+  if (!await loadData()) { $("#loginErr").textContent = "Wrong password, try again."; $("#loginErr").hidden = false; }
+});
+
+// ---------- push notifications on this device (hosted version) ----------
+const b64ToBytes = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+async function currentSub() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  return reg && reg.pushManager.getSubscription();
+}
+async function renderPush() {
+  $("#pushTool").hidden = !data.push;
+  $("#testText").textContent = data.hosted
+    ? "Sends a test reminder to every device that has notifications turned on."
+    : "Check that Windows notifications show up. Look at the bottom-right of your screen.";
+  $("#howNote").textContent = data.hosted
+    ? "ℹ️ The server checks every few minutes and sends reminders to the devices where you turned notifications on, even when this page is closed."
+    : "ℹ️ Reminders come from a small program running in the background on this PC. It starts automatically when you log in to Windows, so they work even with this page closed.";
+  if (!data.push) return;
+  const sub = await currentSub().catch(() => null), devices = data.push.devices, btn = $("#pushBtn");
+  if (!pushSupported()) {
+    $("#pushText").textContent = isIOS
+      ? "On iPhone/iPad: tap Share → Add to Home Screen, open the app from your home screen, then turn notifications on here."
+      : "This browser can't receive notifications. Try Chrome, Edge or Firefox.";
+    btn.hidden = true;
+  } else if (sub) {
+    $("#pushText").textContent = `✓ On for this device. ${devices} device${devices === 1 ? "" : "s"} in total get reminders.`;
+    btn.hidden = false; btn.textContent = "Turn off here"; btn.className = "btn";
+  } else {
+    $("#pushText").textContent = Notification.permission === "denied"
+      ? "Notifications are blocked for this site. Allow them in your browser's site settings, then reload."
+      : `Off for this device. ${devices ? `${devices} other device${devices === 1 ? "" : "s"} get reminders.` : "No device gets reminders yet!"}`;
+    btn.hidden = false; btn.textContent = "Turn on"; btn.className = "btn primary";
+  }
+  $("#status").classList.toggle("off", !devices);
+  $("#statusText").textContent = devices ? "Reminders on" : "Notifications off: see Settings";
+}
+$("#pushBtn").onclick = async () => {
+  const btn = $("#pushBtn"); btn.disabled = true;
+  try {
+    const old = await currentSub();
+    if (old) {
+      await old.unsubscribe();
+      data = await api("/api/unsubscribe", { endpoint: old.endpoint }); toast("Notifications turned off on this device");
+    } else {
+      if (await Notification.requestPermission() !== "granted") throw new Error("Notifications were not allowed.");
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(data.push.publicKey) });
+      data = await api("/api/subscribe", { subscription: sub.toJSON() }); toast("Notifications on! Try “Send test”");
+    }
+    render();
+  } catch (ex) { toast(ex.message); }
+  btn.disabled = false;
+};
+
 // ---------- boot ----------
+async function loadData() {
+  try {
+    data = await api("/api/data");
+    $("#status").classList.remove("off");
+    $("#statusText").textContent = "Reminders on";
+    render();
+    return true;
+  } catch (ex) {
+    $("#status").classList.add("off");
+    $("#statusText").textContent = ["127.0.0.1", "localhost"].includes(location.hostname)
+      ? "App not running: double-click start.bat" : ex.message;
+    return false;
+  }
+}
 (async function boot() {
   switchTab(new URLSearchParams(location.search).get("tab") || store.get("tab") || "dashboard");
-  try {
-    data = await api("/api/data"); render();
-    $("#statusText").textContent = "Reminders on";
-  } catch {
-    $("#status").classList.add("off");
-    $("#statusText").textContent = "App not running: double-click start.bat";
-  }
+  if (pushSupported()) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  await loadData();
   setInterval(tick, 1000);
   setInterval(async () => { try { data = await api("/api/data"); render(); } catch {} }, 5 * 60000);
 })();
