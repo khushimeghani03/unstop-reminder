@@ -27,13 +27,12 @@ Then open http://127.0.0.1:8765. Or double-click `start.bat`, which starts it in
 
 The hosted version runs online, so reminders arrive as notifications on your phone and computer, even when your PC is off. It's the same web app, backed by [`api/index.py`](api/index.py) instead of `server.py`.
 
-1. **Database:** in your Vercel project, open **Storage**, create an **Upstash for Redis** database (free plan) and connect it to the project. This adds the `KV_REST_API_*` variables automatically.
+1. **Database:** in your Vercel project, open **Storage**, create an **Upstash for Redis** database (free plan) and connect it to the project. This adds the `KV_REST_API_*` variables automatically. (Or, using the CLI: `vercel integration add upstash/upstash-kv`.)
 2. **Secrets:** in **Settings → Environment Variables**, add:
    - `APP_PASSWORD`: the password you'll use to open the app. Pick a strong one, because your Unstop login tokens are stored on the server.
    - `CRON_SECRET`: a long random string, for the reminder scheduler.
 3. **Redeploy** (Deployments → ⋯ → Redeploy) so the new settings take effect. The project's Framework Preset should be **Other**.
-4. **Reminder schedule:** Vercel's free plan only runs scheduled jobs once a day, which is too slow for reminders. Create a free account at [cron-job.org](https://cron-job.org) and add a job that opens
-   `https://<your-app>.vercel.app/api/cron?key=<your CRON_SECRET>` **every 5 minutes**. (On Vercel Pro you can change the schedule in `vercel.json` to `*/5 * * * *` instead.)
+4. **Reminder schedule:** Vercel's free plan only runs scheduled jobs once a day, which is too slow for reminders. Instead, a free **Upstash QStash** schedule (Vercel Marketplace) calls `https://<your-app>.vercel.app/api/cron` **every 5 minutes**, sending `Authorization: Bearer <CRON_SECRET>`. You can see it in the Upstash console under QStash → Schedules. Any other scheduler that calls `/api/cron?key=<CRON_SECRET>` works too, such as [cron-job.org](https://cron-job.org).
 5. Open your app, enter the password, then in **Settings** press **Turn on** under *Notifications on this device*. Do this on every phone and computer where you want reminders, then press **Send test**.
    - **iPhone/iPad:** first tap Share → **Add to Home Screen** and open the app from there. Safari only allows notifications for home-screen apps.
 6. In **Accounts**, drag the **⏰ Connect to Reminder** button to your bookmarks bar again. A bookmark made from the local app points at your PC and won't work with the hosted app.
